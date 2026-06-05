@@ -32,6 +32,43 @@ def load_pdf(filepath: str):
     print(f"[加载完成] 共 {len(documents)} 页")
     return documents
 
+# 处理合并单元格：前向填充空表头，合并连续同名列
+def _clean_table(rows, headers):
+    """处理 Excel/CSV 中合并单元格导致的 None 表头"""
+    # Step 1: 前向填充 —— None 继承上一个有效表头
+    cleaned = []
+    last = ""
+    for h in headers:
+        h = str(h).strip() if h else ""
+        if not h or h.lower() == "none":
+            h = last
+        cleaned.append(h)
+        last = h
+
+    # Step 2: 合并连续同名列 —— "学号,学号,学号,学号" → "学号"
+    merged_headers = []
+    merged_rows = [[] for _ in rows]
+
+    i = 0
+    while i < len(cleaned):
+        h = cleaned[i]
+        j = i
+        while j < len(cleaned) and cleaned[j] == h:
+            j += 1
+        merged_headers.append(h)
+        # 把连续同名列的非空值拼成一个字段
+        for r_idx, row in enumerate(rows):
+            values = [
+                str(row[k])
+                for k in range(i, j)
+                if row[k] is not None and str(row[k]).strip().lower() != "none"
+            ]
+            merged_rows[r_idx].append(" ".join(values) if values else "")
+        i = j
+
+    return merged_rows, merged_headers
+
+
 # 表格 → 自然语言共用转换逻辑
 def _table_to_text(rows, headers, filepath):
     """将表格数据转为结构化自然语言文本，load_csv 和 load_xlsx 共用"""
@@ -55,6 +92,7 @@ def load_csv(filepath: str):
         reader = csv.reader(f)
         headers = next(reader)
         rows = list(reader)
+    rows, headers = _clean_table(rows, headers)
     doc = _table_to_text(rows, headers, filepath)
     print(f"[加载完成] CSV 表格：{len(headers)} 列，{len(rows)} 行，已转为自然语言文本")
     return [doc]
@@ -71,6 +109,7 @@ def load_xlsx(filepath: str):
     headers = [str(h) for h in next(rows_iter)]
     rows = [[str(c) for c in row] for row in rows_iter]
     wb.close()
+    rows, headers = _clean_table(rows, headers)
     doc = _table_to_text(rows, headers, filepath)
     print(f"[加载完成] Excel 表格：{len(headers)} 列，{len(rows)} 行，已转为自然语言文本")
     return [doc]
