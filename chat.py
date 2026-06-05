@@ -136,17 +136,32 @@ def ask(query: str, vector_store: Chroma, llm):
 
 # ===== 6. 跑一遍试试 =====
 if __name__ == "__main__":
+    import os
+    import subprocess
+    import sys
+
     print("=" * 50)
-    print("RAG 问答")
+    print("RAG 问答系统")
     print("=" * 50)
 
-    # 加载之前建好的向量数据库
+    # 加载 Embedding 模型
     embedding_model = HuggingFaceEmbeddings(
         model_name="BAAI/bge-small-zh-v1.5",
         model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": True},
     )
 
+    # 检查向量库是否存在
+    if not os.path.exists("./chroma_db") or not os.listdir("./chroma_db"):
+        print("[提示] 向量库为空，请先上传文档")
+        filepath = input("输入文件路径（跳过请按回车）: ").strip().strip('"').strip("'")
+        if filepath and os.path.exists(filepath):
+            subprocess.run([sys.executable, "upload.py", filepath])
+        else:
+            print("已跳过。请运行 python upload.py <文件路径> 后再启动问答。")
+            sys.exit(0)
+
+    # 加载向量库
     vector_store = Chroma(
         persist_directory="./chroma_db",
         embedding_function=embedding_model,
@@ -154,6 +169,24 @@ if __name__ == "__main__":
 
     # 初始化 LLM
     llm = create_llm()
+
+    print("\n[菜单] 1.开始问答  2.上传更多文档  3.退出")
+    choice = input("请选择 (1/2/3): ").strip()
+    if choice == "2":
+        filepath = input("输入文件路径: ").strip().strip('"').strip("'")
+        if filepath and os.path.exists(filepath):
+            subprocess.run([sys.executable, "upload.py", filepath])
+            # 重新加载向量库
+            vector_store = Chroma(
+                persist_directory="./chroma_db",
+                embedding_function=embedding_model,
+            )
+        else:
+            print(f"[错误] 文件不存在: {filepath}")
+            sys.exit(1)
+    elif choice == "3":
+        print("再见！")
+        sys.exit(0)
 
     # 交互式问答循环
     print("输入问题开始问答，输入 quit 或 exit 退出")

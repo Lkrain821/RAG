@@ -5,6 +5,10 @@
 !doc_loader.py
 !build_index.py
 !chat.py
+!upload.py
 
 # 保留 .gitignore 自身
 !.gitignore
+
+# 保留依赖清单
+!requirements.txt
