@@ -32,31 +32,33 @@ def load_pdf(filepath: str):
     print(f"[加载完成] 共 {len(documents)} 页")
     return documents
 
-# 加载一个 CSV 文件
-def load_csv(filepath: str):
-    """加载 CSV 表格，转为结构化自然语言文本，便于 Embedding 和检索"""
-    with open(filepath, encoding="utf-8") as f:
-        reader = csv.reader(f)
-        headers = next(reader)
-        rows = list(reader)
-
-    # 生成摘要（放最前面，便于检索"这个表有哪些列"）
+# 表格 → 自然语言共用转换逻辑
+def _table_to_text(rows, headers, filepath):
+    """将表格数据转为结构化自然语言文本，load_csv 和 load_xlsx 共用"""
     header_str = "」「".join(headers)
     summary = (
         f"表格摘要：此表格包含 {len(headers)} 列，"
         f"分别为「{header_str}」。共 {len(rows)} 行数据。"
     )
-
-    # 逐行转结构化文本（"表头: 值"格式，Embedding 能理解列间关系）
     lines = [summary, "=" * 50]
     for i, row in enumerate(rows):
         parts = [f"{headers[j]}: {row[j]}" for j in range(len(headers))]
         lines.append(f"第{i+1}行 — " + " | ".join(parts))
-
     text = "\n".join(lines)
-    doc = Document(page_content=text, metadata={"source": filepath})
+    return Document(page_content=text, metadata={"source": filepath})
+
+
+# 加载一个 CSV 文件
+def load_csv(filepath: str):
+    """加载 CSV 表格，转为结构化自然语言文本"""
+    with open(filepath, encoding="utf-8") as f:
+        reader = csv.reader(f)
+        headers = next(reader)
+        rows = list(reader)
+    doc = _table_to_text(rows, headers, filepath)
     print(f"[加载完成] CSV 表格：{len(headers)} 列，{len(rows)} 行，已转为自然语言文本")
     return [doc]
+
 
 # 加载一个 Excel 文件
 def load_xlsx(filepath: str):
@@ -69,20 +71,7 @@ def load_xlsx(filepath: str):
     headers = [str(h) for h in next(rows_iter)]
     rows = [[str(c) for c in row] for row in rows_iter]
     wb.close()
-
-    header_str = "」「".join(headers)
-    summary = (
-        f"表格摘要：此表格包含 {len(headers)} 列，"
-        f"分别为「{header_str}」。共 {len(rows)} 行数据。"
-    )
-
-    lines = [summary, "=" * 50]
-    for i, row in enumerate(rows):
-        parts = [f"{headers[j]}: {row[j]}" for j in range(len(headers))]
-        lines.append(f"第{i+1}行 — " + " | ".join(parts))
-
-    text = "\n".join(lines)
-    doc = Document(page_content=text, metadata={"source": filepath})
+    doc = _table_to_text(rows, headers, filepath)
     print(f"[加载完成] Excel 表格：{len(headers)} 列，{len(rows)} 行，已转为自然语言文本")
     return [doc]
 
