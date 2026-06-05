@@ -80,17 +80,30 @@ def upload(filepath: str, chunk_size=500, chunk_overlap=50, rebuild=False):
 if __name__ == "__main__":
     rebuild = "--rebuild" in sys.argv
 
-    # 获取文件路径
+    # 获取文件路径（命令行参数）
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if args:
         filepath = args[0]
     else:
-        filepath = input("请输入要上传的文件路径: ").strip()
-        # 去掉可能的引号
-        filepath = filepath.strip('"').strip("'")
+        filepath = ""
 
-    if not os.path.exists(filepath):
-        print(f"[错误] 文件不存在: {filepath}")
-        exit(1)
+    # 循环直到用户提供有效文件
+    while True:
+        if not filepath:
+            filepath = input("请输入要上传的文件路径: ").strip()
+            filepath = filepath.strip('"').strip("'")
+
+        if not os.path.exists(filepath):
+            print(f"[错误] 文件不存在: {filepath}")
+            filepath = ""
+            continue
+
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext not in (".txt", ".pdf"):
+            print(f"[错误] 不支持的文件类型: {ext}，仅支持 .txt 和 .pdf")
+            filepath = ""
+            continue
+
+        break
 
     upload(filepath, rebuild=rebuild)
