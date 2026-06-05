@@ -1,0 +1,10 @@
+# 忽略所有文件
+*
+
+# 保留三个核心 RAG 文件
+!doc_loader.py
+!build_index.py
+!chat.py
+
+# 保留 .gitignore 自身
+!.gitignore
