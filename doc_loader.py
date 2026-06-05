@@ -70,49 +70,61 @@ def _clean_table(rows, headers):
 
 
 # 表格 → 自然语言共用转换逻辑
-def _table_to_text(rows, headers, filepath):
-    """将表格数据转为结构化自然语言文本，load_csv 和 load_xlsx 共用"""
+def _rows_to_documents(rows, headers, filepath):
+    """
+    将表格数据转为自然语言文本，每行一个独立 Document
+    这样每行不会被文本切块拦腰斩断，检索时整行命中
+    """
+    docs = []
+    # 摘要作为第一个文档（便于回答"这个表有哪些列"）
     header_str = "」「".join(headers)
     summary = (
         f"表格摘要：此表格包含 {len(headers)} 列，"
         f"分别为「{header_str}」。共 {len(rows)} 行数据。"
     )
-    lines = [summary, "=" * 50]
+    docs.append(Document(page_content=summary, metadata={"source": filepath, "row": "summary"}))
+
+    # 每行一个独立文档
     for i, row in enumerate(rows):
         parts = [f"{headers[j]}: {row[j]}" for j in range(len(headers))]
-        lines.append(f"第{i+1}行 — " + " | ".join(parts))
-    text = "\n".join(lines)
-    return Document(page_content=text, metadata={"source": filepath})
+        text = f"第{i+1}行 — " + " | ".join(parts)
+        docs.append(Document(page_content=text, metadata={"source": filepath, "row": i + 1}))
+
+    return docs
 
 
 # 加载一个 CSV 文件
 def load_csv(filepath: str):
-    """加载 CSV 表格，转为结构化自然语言文本"""
+    """加载 CSV 表格，每行转为独立的自然语言文档"""
     with open(filepath, encoding="utf-8") as f:
         reader = csv.reader(f)
         headers = next(reader)
         rows = list(reader)
+    # 过滤空行
+    rows = [r for r in rows if any(c and str(c).strip().lower() != "none" for c in r)]
     rows, headers = _clean_table(rows, headers)
-    doc = _table_to_text(rows, headers, filepath)
+    docs = _rows_to_documents(rows, headers, filepath)
     print(f"[加载完成] CSV 表格：{len(headers)} 列，{len(rows)} 行，已转为自然语言文本")
-    return [doc]
+    return docs
 
 
 # 加载一个 Excel 文件
 def load_xlsx(filepath: str):
-    """加载 Excel (.xlsx) 表格，转为结构化自然语言文本"""
+    """加载 Excel (.xlsx) 表格，每行转为独立的自然语言文档"""
     from openpyxl import load_workbook
 
     wb = load_workbook(filepath, read_only=True)
     ws = wb.active
     rows_iter = ws.iter_rows(values_only=True)
-    headers = [str(h) for h in next(rows_iter)]
-    rows = [[str(c) for c in row] for row in rows_iter]
+    headers = [str(h) if h is not None else "" for h in next(rows_iter)]
+    rows = [[str(c) if c is not None else "" for c in row] for row in rows_iter]
     wb.close()
+    # 过滤空行（所有值都是空或 None 的行）
+    rows = [r for r in rows if any(v.strip() for v in r)]
     rows, headers = _clean_table(rows, headers)
-    doc = _table_to_text(rows, headers, filepath)
+    docs = _rows_to_documents(rows, headers, filepath)
     print(f"[加载完成] Excel 表格：{len(headers)} 列，{len(rows)} 行，已转为自然语言文本")
-    return [doc]
+    return docs
 
 
 # ===== 2. 文本分割 =====
