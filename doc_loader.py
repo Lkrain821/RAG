@@ -13,6 +13,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ===== 1. 加载文档 =====
 from langchain_community.document_loaders import TextLoader, PyPDFLoader
+from langchain_core.documents import Document
+import csv
 
 # 加载一个 txt 文件
 def load_txt(filepath: str):
@@ -29,6 +31,32 @@ def load_pdf(filepath: str):
     documents = loader.load()
     print(f"[加载完成] 共 {len(documents)} 页")
     return documents
+
+# 加载一个 CSV 文件
+def load_csv(filepath: str):
+    """加载 CSV 表格，转为结构化自然语言文本，便于 Embedding 和检索"""
+    with open(filepath, encoding="utf-8") as f:
+        reader = csv.reader(f)
+        headers = next(reader)
+        rows = list(reader)
+
+    # 生成摘要（放最前面，便于检索"这个表有哪些列"）
+    header_str = "」「".join(headers)
+    summary = (
+        f"表格摘要：此表格包含 {len(headers)} 列，"
+        f"分别为「{header_str}」。共 {len(rows)} 行数据。"
+    )
+
+    # 逐行转结构化文本（"表头: 值"格式，Embedding 能理解列间关系）
+    lines = [summary, "=" * 50]
+    for i, row in enumerate(rows):
+        parts = [f"{headers[j]}: {row[j]}" for j in range(len(headers))]
+        lines.append(f"第{i+1}行 — " + " | ".join(parts))
+
+    text = "\n".join(lines)
+    doc = Document(page_content=text, metadata={"source": filepath})
+    print(f"[加载完成] CSV 表格：{len(headers)} 列，{len(rows)} 行，已转为自然语言文本")
+    return [doc]
 
 
 # ===== 2. 文本分割 =====
