@@ -1,7 +1,13 @@
 langchain
 langchain-community
+langchain-huggingface
+langchain-chroma
+langchain-ollama
 langchain-text-splitters
 chromadb
 sentence-transformers
 pypdf
+openpyxl
+jieba
+rank-bm25
 python-dotenv

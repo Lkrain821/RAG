@@ -1,6 +1,6 @@
 """
 =========== 文档上传工具 ===========
-支持 TXT / PDF / CSV 文件上传到知识库
+支持 TXT / PDF / CSV / XLSX 文件上传到知识库
 
 用法：
   python upload.py <文件路径>
@@ -14,7 +14,7 @@ import shutil
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
-from doc_loader import load_txt, load_pdf, load_csv, split_documents
+from doc_loader import load_txt, load_pdf, load_csv, load_xlsx, split_documents
 
 
 # ===== 1. 识别文件类型 =====
@@ -27,8 +27,10 @@ def load_file(filepath: str):
         return load_pdf(filepath)
     elif ext == ".csv":
         return load_csv(filepath)
+    elif ext == ".xlsx":
+        return load_xlsx(filepath)
     else:
-        print(f"[错误] 不支持的文件类型: {ext}，仅支持 .txt、.pdf 和 .csv")
+        print(f"[错误] 不支持的文件类型: {ext}，仅支持 .txt、.pdf、.csv 和 .xlsx")
         return None
 
 
@@ -101,8 +103,8 @@ if __name__ == "__main__":
             continue
 
         ext = os.path.splitext(filepath)[1].lower()
-        if ext not in (".txt", ".pdf", ".csv"):
-            print(f"[错误] 不支持的文件类型: {ext}，仅支持 .txt、.pdf 和 .csv")
+        if ext not in (".txt", ".pdf", ".csv", ".xlsx"):
+            print(f"[错误] 不支持的文件类型: {ext}，仅支持 .txt、.pdf、.csv 和 .xlsx")
             filepath = ""
             continue
 
