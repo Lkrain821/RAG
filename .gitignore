@@ -1,14 +1,38 @@
-# 忽略所有文件
-*
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
 
-# 保留三个核心 RAG 文件
-!doc_loader.py
-!build_index.py
-!chat.py
-!upload.py
+# Virtual environments
+venv/
+env/
+.venv/
+.env
+.env.local
 
-# 保留 .gitignore 自身
-!.gitignore
+# Vector database (can be rebuilt)
+chroma_db/
 
-# 保留依赖清单
-!requirements.txt
+# Test data
+data/test.csv
+data/test.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+
+# Logs
+*.log
+logs/
