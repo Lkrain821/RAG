@@ -1,0 +1,81 @@
+# RAG 进阶学习资料
+
+## 主题 1: 什么是 RAG
+
+RAG(Retrieval-Augmented Generation)是一种结合信息检索与文本生成的技术。
+
+它的核心思想是:在生成回答之前,先从外部知识库中检索相关文档,然后将检索到的内容作为上下文输入给大语言模型。
+
+这样做的好处有三个:第一,解决大模型的知识过时问题;第二,让大模型能够访问私有数据;第三,有效减少幻觉。
+
+RAG 特别适合需要引用准确来源、对实时性有要求、或者要处理私有领域知识的场景。
+
+## 主题 2: RAG 的工作流程
+
+RAG 的工作流程分为两个阶段:离线阶段进行文档加载、文本分割和向量化存储;在线阶段进行查询向量化、相似度检索和答案生成。
+
+离线阶段一般包含以下步骤:文档采集、格式解析、文本清洗、分块、向量化、入库。
+
+在线阶段的核心是:用户查询 → 编码 → 检索 → 重排 → 拼 Prompt → LLM 生成。
+
+在线阶段每一步都可以加优化,比如检索可以用混合检索,生成可以加 Self-RAG 反思。
+
+## 主题 3: 向量化(Embedding)原理
+
+向量化(Embedding)是 RAG 的核心环节之一,它将文本转换为高维向量,使得语义相似的文本在向量空间中距离更近。
+
+向量化模型一般基于 Transformer 编码器,通过 Self-Attention 机制让每个词融合上下文信息,最后通过池化得到整个句子的向量表示。
+
+常用的 Embedding 模型包括 OpenAI 的 text-embedding-3-small、智源的 BGE 系列、以及开源的 sentence-transformers。
+
+中文场景下 BGE-small-zh 是性价比最高的选择,512 维向量,CPU 也能跑,本地推理免费。
+
+## 主题 4: 向量数据库选型
+
+向量数据库专门用于存储和检索高维向量,核心功能是近似最近邻(ANN)搜索,常见算法有 HNSW、IVF、PQ。
+
+Chroma 是一个轻量级的本地向量数据库,适合学习和小规模项目;生产环境可选用 Milvus、Qdrant、Weaviate 等。
+
+Chroma 的存储位置默认为 ./chroma_db/ 目录,首次创建后所有向量持久化,重启程序不需要重新计算。
+
+HNSW 索引通过构建分层图实现 O(log N) 复杂度的近似最近邻搜索,适合百万级以下文档。
+
+## 主题 5: 检索策略对比
+
+向量检索基于语义相似度,适合模糊查询,但对编号、专有名词等精确匹配不够敏感。
+
+BM25 是一种基于词频和逆文档频率的经典检索算法,适合精确匹配关键词,在 RAG 中常与向量检索结合形成混合检索。
+
+混合检索融合 BM25 和向量检索的结果,通常使用 RRF(Reciprocal Rank Fusion)算法,能显著提升召回质量。
+
+RRF 公式为 score = Σ 1/(k + rank),其中 k 通常取 60,核心思想是只看排名不看分数,避免不同检索器分数不可比的问题。
+
+## 主题 6: 高级 RAG 优化
+
+Rerank(重排)是 RAG 系统提升精度的关键环节,通常在初检索后用 Cross-Encoder 模型对 Top-K 重新打分。
+
+BGE-Reranker 是中文场景首选的 Cross-Encoder 模型,效果立竿见影,CPU 也能跑。
+
+Query 改写是另一种高级优化手段,通过 LLM 把用户模糊的问题改写得更精准,或拆分成多个子查询。
+
+常用的 Query 改写策略有 MultiQuery(多角度查询)、HyDE(假想文档嵌入)、Step-back(回退到更通用的查询)。
+
+## 主题 7: 评估与 RAGAS
+
+RAGAS 是 RAG 评估的事实标准框架,提供 4 个核心指标:context_precision、context_recall、faithfulness、answer_relevancy。
+
+context_precision 衡量检索结果中真正相关内容的占比,context_recall 衡量应该召回的有没有召回来。
+
+faithfulness 衡量答案是否完全基于检索内容(防幻觉的关键指标),answer_relevancy 衡量答案与问题的相关度。
+
+RAGAS 需要 LLM-as-Judge,推荐用 GPT-4 或 DeepSeek 做评判,本地 Ollama(qwen3:4b)做 judge 偏高不稳。
+
+## 主题 8: Agentic RAG
+
+Agentic RAG 是 2024-2025 兴起的新范式,核心思想是用 AI Agent 来自主决定 RAG 流程的每一步。
+
+具体实现包括 Router(LLM 决策走哪条路径)、Grader(检索质量评分)、Rewriter(查询改写重查)、Reflector(答案自评幻觉)。
+
+LangGraph 是实现 Agentic RAG 的主流框架,基于 StateGraph 做条件分支和状态管理。
+
+Self-RAG(2023)、CRAG(2024)、Adaptive-RAG(2024)都是 Agentic RAG 家族的具体技术,适合处理复杂的多文档、多轮对话场景。
