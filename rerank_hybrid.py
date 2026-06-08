@@ -1,22 +1,28 @@
 # ============== rerank_hybrid.py ==============
 # D2 任务:在 D1 混合检索基础上加 BGE-Reranker 精排
-# 你需要做的是下面标了 [填空] 的 3 个动作
+# 实现方式:用 HuggingFace transformers 直接加载 BGE-Reranker
+# (绕开 FlagEmbedding 1.4.0 与 transformers 5.x 的兼容问题)
 # ===============================================
 
 import os
+import torch
+
+# 抑制 huggingface 缓存 symlink 警告(Windows 上不痛不痒)
+os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
+
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.retrievers import BM25Retriever
 from langchain_classic.retrievers import EnsembleRetriever
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from FlagEmbedding import FlagReranker
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import jieba
 
 # ============== 加载文档(D1 已有,直接复用)==============
 loader = TextLoader("data/test.txt", encoding="utf-8")
 raw_docs = loader.load()
-splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=30)
 docs = splitter.split_documents(raw_docs)
 print(f"切了 {len(docs)} 个块")
 
@@ -42,37 +48,61 @@ ensemble_retriever = EnsembleRetriever(
 # ==============================================
 
 
-# ============== [填空 1] 初始化 Reranker ==============
-# BGE-Reranker 是 Cross-Encoder,比 Bi-Encoder 向量检索更精准但更慢
-# 第一次跑会下载模型(约 1.1GB),后续会缓存
-# 提示:用 FlagReranker 类
-reranker = None  # ← 你来填
+# ============== 初始化 BGE-Reranker(Cross-Encoder)==============
+# 用 transformers 直接加载,绕开 FlagEmbedding 的 prepare_for_model 兼容问题
+# BGE-Reranker 是 Cross-Encoder,把 query+doc 一起编码,比 Bi-Encoder 向量检索更精准
+RERANK_MODEL_NAME = "BAAI/bge-reranker-base"
+
+print(f"正在加载 Reranker 模型:{RERANK_MODEL_NAME} ...")
+rerank_tokenizer = AutoTokenizer.from_pretrained(RERANK_MODEL_NAME)
+rerank_model = AutoModelForSequenceClassification.from_pretrained(RERANK_MODEL_NAME)
+rerank_model.eval()  # 推理模式
+
+# 自动选设备:有 GPU 用 GPU,没 GPU 用 CPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+rerank_model.to(device)
+print(f"Reranker 模型已加载到 {device}")
 # ==============================================
 
 
-# ============== [填空 2] Rerank 函数 ==============
+# ============== Rerank 精排函数 ==============
 # 输入:query 字符串 + 候选 docs 列表
 # 输出:rerank 后的 docs 列表(Top-N)
-# 提示:
-#   1. 把每个 doc 转成 "query + doc_content" 配对
-#   2. reranker.compute_score() 算分数
-#   3. 按分数降序排,取前 top_n 个
 def rerank_docs(query: str, candidates: list, top_n: int = 5) -> list:
-    """对初检索结果做精排,返回 Top-N 文档列表"""
-    return None  # ← 你来填
+    if not candidates:
+        return []
+    
+    # 1. 构造 [query, doc_content] 配对
+    pairs = [[query, doc.page_content] for doc in candidates]
+    
+    # 2. tokenizer 编码(自动 padding + truncation)
+    with torch.no_grad():
+        inputs = rerank_tokenizer(
+            pairs,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt"
+        ).to(device)
+        
+        # 3. 模型推理,拿到 relevance 分数
+        scores = rerank_model(**inputs, return_dict=True).logits.view(-1).float().cpu().tolist()
+    
+    # 4. 按分数降序排,取 Top-N
+    sorted_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    return [candidates[i] for i in sorted_indices[:top_n]]
 # ==============================================
 
 
-# ============== [填空 3] 拼装完整流水线 ==============
-# 流水线:query → retrieve(20) → rerank → top-5
-# 提示:ensemble_retriever.invoke(query) 拿 20 个,再 rerank_docs 取 5 个
+# ============== 拼装完整流水线 ==============
+# 流水线:query → 混合检索(召回 20)→ Rerank 精排(取 Top-5)
 def hybrid_search(query: str, top_n: int = 5) -> list:
-    """完整流水线:混合检索 + Rerank 精排"""
-    return None  # ← 你来填
+    candidates = ensemble_retriever.invoke(query)
+    return rerank_docs(query, candidates, top_n)
 # ==============================================
 
 
-# ============== 测试(不用改)==============
+# ============== 测试 ==============
 if __name__ == "__main__":
     print("=" * 50)
     print("混合检索 + BGE-Reranker 精排 测试")
