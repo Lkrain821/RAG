@@ -68,7 +68,9 @@ Stage 6 [D23-D30]  前沿 + 简历整合             ← 加分项
 - **何时混合有效**:精确查询(编号/术语/姓名)+ 模糊查询(语义),混合显著好于单策略
 
 ### 资料清单
-- 📄 [Advanced RAG Techniques: an Illustrated Overview](https://pub.towardsai.net/advanced-rag-techniques-an-illustrated-overview-04d193d8f90d) — 一篇顶十篇
+- 📄 [Advanced RAG Techniques: an Illustrated Overview(中文精校版)](https://docs.feishu.cn/article/wiki/MVMxwHBiNiz3Zpkj0aGc7QMRnFb) — 一篇顶十篇,飞书镜像稳定可访问
+- 📄 [Advanced RAG Techniques(英文原文镜像)](https://tool.lu/ru_RU/article/5SG/detail) — 备用镜像
+- 📄 [高级RAG技术综述(知乎完整翻译)](https://zhuanlan.zhihu.com/p/695224875) — 备用中文版
 - 📄 [Reciprocal Rank Fusion 论文(2021)](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) — Cormack 经典
 - 🎥 [LangChain 官方 RAG 教程](https://python.langchain.com/docs/tutorials/rag/) — 必看
 - 🎥 [BM25 Explained(YouTube)](https://www.youtube.com/results?search_query=bm25+explained) — 5 分钟讲清
@@ -966,7 +968,7 @@ pip install chromadb sentence-transformers rank_bm25
 # echo "# D1 - 混合检索" > notes/D1_hybrid_search.md
 
 # 5. 开始读 Advanced RAG 综述
-# 打开 https://pub.towardsai.net/advanced-rag-techniques-an-illustrated-overview-04d193d8f90d
+# 打开 https://docs.feishu.cn/article/wiki/MVMxwHBiNiz3Zpkj0aGc7QMRnFb
 ```
 
 ---
