@@ -15,10 +15,6 @@ env/
 # Vector database (can be rebuilt)
 chroma_db/
 
-# Test data
-data/test.csv
-data/test.txt
-
 # IDE
 .vscode/
 .idea/
