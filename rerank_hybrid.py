@@ -22,7 +22,7 @@ import jieba
 # ============== 加载文档(D1 已有,直接复用)==============
 loader = TextLoader("data/test.txt", encoding="utf-8")
 raw_docs = loader.load()
-splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=30)
+splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=30)  # chunk 切细
 docs = splitter.split_documents(raw_docs)
 print(f"切了 {len(docs)} 个块")
 
