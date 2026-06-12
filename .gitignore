@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -29,6 +29,8 @@ dist/
 .pytest_cache/
 .mypy_cache/
 
-# Logs
-*.log
+# Logs (all inside logs/ directory)
 logs/
+
+# Monitor snapshot
+.monitor_snapshot.json

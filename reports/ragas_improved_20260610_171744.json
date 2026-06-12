@@ -1,0 +1,12 @@
+{
+  "improved": {
+    "label": "Improved (Stage 1)",
+    "scores": {
+      "context_precision": 0.9067,
+      "context_recall": 1.0,
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.8819
+    },
+    "elapsed_s": 197.6
+  }
+}

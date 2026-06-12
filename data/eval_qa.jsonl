@@ -1,0 +1,34 @@
+{"question": "什么是RAG？它的核心思想是什么？", "ground_truth": "RAG（Retrieval-Augmented Generation）是一种结合信息检索与文本生成的技术。核心思想是在生成回答之前，先从外部知识库中检索相关文档，然后将检索到的内容作为上下文输入给大语言模型。好处有三个：解决大模型的知识过时问题、让大模型能够访问私有数据、有效减少幻觉。"}
+{"question": "RAG适合哪些应用场景？", "ground_truth": "RAG特别适合需要引用准确来源、对实时性有要求、或者要处理私有领域知识的场景。"}
+{"question": "RAG的离线阶段包含哪些步骤？", "ground_truth": "离线阶段包含文档采集、格式解析、文本清洗、分块、向量化、入库。"}
+{"question": "RAG的在线阶段核心流程是什么？", "ground_truth": "在线阶段的核心流程是：用户查询 → 编码 → 检索 → 重排 → 拼Prompt → LLM生成。每一步都可以加优化，比如检索可以用混合检索，生成可以加Self-RAG反思。"}
+{"question": "Embedding在RAG中起什么作用？", "ground_truth": "向量化（Embedding）是RAG的核心环节之一，它将文本转换为高维向量，使得语义相似的文本在向量空间中距离更近，从而实现语义检索。"}
+{"question": "Embedding模型基于什么架构？核心机制是什么？", "ground_truth": "向量化模型一般基于Transformer编码器，通过Self-Attention机制让每个词融合上下文信息，最后通过池化得到整个句子的向量表示。"}
+{"question": "中文场景下推荐的Embedding模型是什么？有什么优势？", "ground_truth": "中文场景下BGE-small-zh是性价比最高的选择，512维向量，CPU也能跑，本地推理免费。"}
+{"question": "常用的Embedding模型有哪些？", "ground_truth": "常用的Embedding模型包括OpenAI的text-embedding-3-small、智源的BGE系列、以及开源的sentence-transformers。"}
+{"question": "向量数据库的核心功能是什么？常见ANN算法有哪些？", "ground_truth": "向量数据库专门用于存储和检索高维向量，核心功能是近似最近邻（ANN）搜索。常见算法有HNSW、IVF、PQ。"}
+{"question": "Chroma向量数据库有什么特点？适合什么场景？", "ground_truth": "Chroma是一个轻量级的本地向量数据库，适合学习和小规模项目。存储位置默认为./chroma_db/目录，首次创建后所有向量持久化，重启程序不需要重新计算。"}
+{"question": "生产环境可以选用哪些向量数据库？", "ground_truth": "生产环境可选用Milvus、Qdrant、Weaviate等。"}
+{"question": "HNSW索引的实现原理是什么？", "ground_truth": "HNSW索引通过构建分层图实现O(log N)复杂度的近似最近邻搜索，适合百万级以下文档。"}
+{"question": "向量检索和BM25检索各有什么优缺点？", "ground_truth": "向量检索基于语义相似度，适合模糊查询，但对编号、专有名词等精确匹配不够敏感。BM25是一种基于词频和逆文档频率的经典检索算法，适合精确匹配关键词。"}
+{"question": "什么是混合检索？如何融合两种检索策略的结果？", "ground_truth": "混合检索融合BM25和向量检索的结果，通常使用RRF（Reciprocal Rank Fusion）算法。RRF公式为score = Σ 1/(k + rank)，其中k通常取60，核心思想是只看排名不看分数，避免不同检索器分数不可比的问题。"}
+{"question": "RRF公式中的k参数通常取什么值？为什么只看排名不看分数？", "ground_truth": "RRF公式中k通常取60。只看排名不看分数的核心原因是不同检索器的分数尺度不可比，BM25的分数和向量相似度分数的量纲不同，用排名融合避免了归一化问题。"}
+{"question": "Rerank（重排）在RAG系统中的作用是什么？", "ground_truth": "Rerank（重排）是RAG系统提升精度的关键环节，通常在初检索后用Cross-Encoder模型对Top-K重新打分，可以显著提升检索精度。"}
+{"question": "BGE-Reranker是什么？适用于什么场景？", "ground_truth": "BGE-Reranker是中文场景首选的Cross-Encoder模型，效果立竿见影，CPU也能跑。它通过联合编码查询和文档的方式精确计算相关性分数。"}
+{"question": "Query改写有哪些常用策略？", "ground_truth": "常用的Query改写策略有MultiQuery（多角度查询）、HyDE（假想文档嵌入）、Step-back（回退到更通用的查询）。通过LLM把用户模糊的问题改写得更精准，或拆分成多个子查询。"}
+{"question": "HyDE策略的核心原理是什么？", "ground_truth": "HyDE（假想文档嵌入）的核心原理是用LLM先生成一个假设性的答案文档，然后用这个假想文档的向量去检索真实文档，从而缩小查询和文档之间的语义差距。"}
+{"question": "RAGAS是什么？提供哪些核心评估指标？", "ground_truth": "RAGAS是RAG评估的事实标准框架，提供4个核心指标：context_precision（上下文精确度）、context_recall（上下文召回率）、faithfulness（忠实度）、answer_relevancy（答案相关度）。"}
+{"question": "context_precision和context_recall分别衡量什么？", "ground_truth": "context_precision衡量检索结果中真正相关内容的占比，context_recall衡量应该召回的有没有召回来。两者合起来评估检索阶段的质量。"}
+{"question": "faithfulness指标为什么是防幻觉的关键？", "ground_truth": "faithfulness衡量答案是否完全基于检索内容，是防幻觉的关键指标。如果答案中包含了检索文档没有的信息，faithfulness分数就会降低，说明模型产生了幻觉。"}
+{"question": "RAGAS评估为什么需要强LLM做judge？本地小模型有什么问题？", "ground_truth": "RAGAS需要LLM-as-Judge，推荐用GPT-4或DeepSeek做评判，因为本地Ollama小模型（如qwen3:4b）做judge偏高且不稳定，评估结果不可靠。"}
+{"question": "Agentic RAG的核心思想是什么？", "ground_truth": "Agentic RAG是2024-2025兴起的新范式，核心思想是用AI Agent来自主决定RAG流程的每一步。包括Router（LLM决策走哪条路径）、Grader（检索质量评分）、Rewriter（查询改写重查）、Reflector（答案自评幻觉）。"}
+{"question": "Agentic RAG包含哪些具体技术？", "ground_truth": "Self-RAG（2023）、CRAG（2024）、Adaptive-RAG（2024）都是Agentic RAG家族的具体技术，适合处理复杂的多文档、多轮对话场景。"}
+{"question": "LangGraph在Agentic RAG中扮演什么角色？", "ground_truth": "LangGraph是实现Agentic RAG的主流框架，基于StateGraph做条件分支和状态管理，可以构建多路径决策的RAG系统。"}
+{"question": "Router在Agentic RAG中的作用是什么？", "ground_truth": "Router通过LLM决策走哪条检索路径，根据用户问题的性质选择最合适的检索策略。例如判断问题是否需要向量检索、是否需要查询外部知识库等。"}
+{"question": "Reflector在Agentic RAG中负责什么？", "ground_truth": "Reflector负责答案自评幻觉检测，对生成的答案进行反思和验证，确保答案质量并决定是否需要重新检索或改写查询。"}
+{"question": "RAG系统中减少幻觉的三个核心手段是什么？", "ground_truth": "RAG减少幻觉的三个核心手段：1）通过检索外部知识库提供准确上下文；2）使用faithfulness指标评估答案是否忠于检索内容；3）Agentic RAG中的Reflector进行答案自评和幻觉检测。"}
+{"question": "Bi-Encoder和Cross-Encoder在检索中有什么区别？", "ground_truth": "Bi-Encoder分别独立编码查询和文档（速度快但精度较低，适合初检索阶段），Cross-Encoder联合编码查询和文档对（精度高但速度慢，适合精排阶段）。BGE-Reranker就是一种Cross-Encoder。"}
+{"question": "chunk切分大小对RAG检索有什么影响？", "ground_truth": "chunk切太粗会导致检索粒度不够，Rerank也没有空间发挥，因为召回候选太少。chunk切细能提升检索粒度，让Rerank精排真正起作用。但也不宜过细，否则可能丢失上下文信息。"}
+{"question": "做RAG优化时，如何证明某个优化手段真的有效？", "ground_truth": "通过控制变量实验（Ablation Study），固定其他变量，只改变一个优化手段，对比前后的评估指标变化。例如用2×2矩阵分别验证chunk切细和Rerank的独立贡献，避免同时改多个变量导致无法归因。"}
+{"question": "如何在RAG面试中用数据证明你的优化效果？", "ground_truth": "用Ablation Study的2×2控制变量实验数据，精确拆解每个优化的独立贡献（例如细粒度分块+30pp，Cross-Encoder精排+33pp），用RAGAS四个指标量化结果，让面试官无法质疑优化归因。"}
+{"question": "Grader在Agentic RAG中如何评估检索质量？", "ground_truth": "Grader对检索结果进行质量评分，判断检索到的文档是否与用户问题相关，如果评分低于阈值则触发查询改写和重新检索。"}

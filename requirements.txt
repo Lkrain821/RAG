@@ -11,3 +11,5 @@ openpyxl
 jieba
 rank-bm25
 python-dotenv
+ragas
+openai

@@ -1,0 +1,12 @@
+{
+  "baseline": {
+    "label": "Baseline (Naive RAG)",
+    "scores": {
+      "context_precision": null,
+      "context_recall": null,
+      "faithfulness": null,
+      "answer_relevancy": null
+    },
+    "elapsed_s": 189.2
+  }
+}
