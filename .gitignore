@@ -18,9 +18,14 @@ chroma_db/
 # IDE
 .vscode/
 .idea/
+.qoder/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Monitor runtime files
+.monitor_last_run.log
+.monitor_snapshot.json
 
 # Build artifacts
 *.egg-info/

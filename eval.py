@@ -1,6 +1,6 @@
 """
 =========== RAGAS 评估 Pipeline ===========
-Stage 2 (D4-D6): RAG 评估体系
+Stage 2-3 (D4-D9): RAG 评估体系
 
 对 RAG 系统进行 4 指标评估:
   - context_precision: 检索结果中相关内容的占比
@@ -8,14 +8,16 @@ Stage 2 (D4-D6): RAG 评估体系
   - faithfulness:     答案是否完全基于检索内容（防幻觉）
   - answer_relevancy: 答案与问题的相关度
 
-支持两种模式:
+支持三种模式:
   - baseline: naive RAG (纯向量检索, 无 rerank, 无 query 改写)
   - improved: Stage 1 完整流水线 (混合检索 + Rerank + rewrite_loop)
+  - stage3:   Stage 3 数据层优化 (语义切块 + ParentDoc + Rerank)
 
 使用方式:
   python eval.py baseline    # 跑 baseline 评估
   python eval.py improved    # 跑 Stage1 改造后评估
-  python eval.py compare     # 两者都跑 + 对比报告
+  python eval.py stage3      # 跑 Stage3 语义切块+ParentDoc 评估
+  python eval.py compare     # 三方对比报告
 """
 
 import json
@@ -48,6 +50,13 @@ EMBEDDING_MODEL = "BAAI/bge-small-zh-v1.5"
 RERANK_MODEL = "BAAI/bge-reranker-base"
 HYBRID_K = 20
 TOP_N = 5
+
+# Stage 3 新增配置
+PARENT_CHUNK_SIZE = 1500       # 父块大小（~750 中文字）
+CHILD_CHUNK_SIZE = 200         # 子块大小（与 CHUNK_SIZE 一致）
+CHILD_CHUNK_OVERLAP = 30
+SEMANTIC_BREAKPOINT_TYPE = "percentile"
+SEMANTIC_BREAKPOINT_AMOUNT = 95
 
 
 # ============== 1. 加载评估数据集 ==============
@@ -300,6 +309,146 @@ def create_improved_pipeline():
     return rewrite_loop_search
 
 
+def create_stage3_pipeline():
+    """
+    Stage 3 完整流水线: 语义切块 + ParentDoc Retriever + 混合检索 + Rerank + rewrite_loop
+
+    与 improved 的区别:
+    1. 切块策略: RecursiveTextSplitter → SemanticChunker（语义感知切块）
+    2. 检索方式: 普通向量检索 → ParentDoc Retriever（细检索粗返回）
+    3. 保留 Stage 1 的混合检索 + Rerank + 改写能力
+    """
+    import torch
+    from langchain_community.retrievers import BM25Retriever
+    from langchain_classic.retrievers import EnsembleRetriever, ParentDocumentRetriever
+    from langchain_community.document_loaders import TextLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_experimental.text_splitter import SemanticChunker
+    from langchain_chroma import Chroma
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_ollama import OllamaLLM
+    from langchain_core.stores import InMemoryStore
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    import jieba
+
+    print("\n[初始化] Stage 3 Pipeline (语义切块 + ParentDoc + Rerank)...")
+
+    # 1. 加载原始文档
+    loader = TextLoader(DATA_PATH, encoding="utf-8")
+    raw_docs = loader.load()
+
+    # 2. 语义切块（替代 RecursiveTextSplitter）
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    semantic_splitter = SemanticChunker(
+        embeddings,
+        breakpoint_threshold_type=SEMANTIC_BREAKPOINT_TYPE,
+        breakpoint_threshold_amount=SEMANTIC_BREAKPOINT_AMOUNT,
+    )
+    semantic_chunks = semantic_splitter.split_documents(raw_docs)
+    print(f"  语义切块: {len(semantic_chunks)} 个块")
+
+    # 3. 用父块切分器构建 Parent-Document Retriever
+    parent_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=PARENT_CHUNK_SIZE,
+        chunk_overlap=100,
+        separators=["\n\n", "\n", "。", "！", "？", "；", " ", ""],
+        add_start_index=True,
+    )
+    child_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHILD_CHUNK_SIZE,
+        chunk_overlap=CHILD_CHUNK_OVERLAP,
+        separators=["\n\n", "\n", "。", "！", "？", "；", " ", ""],
+        add_start_index=True,
+    )
+
+    vectorstore = Chroma(
+        collection_name="stage3_parent_doc",
+        embedding_function=embeddings,
+    )
+    store = InMemoryStore()
+
+    parent_retriever = ParentDocumentRetriever(
+        vectorstore=vectorstore,
+        docstore=store,
+        child_splitter=child_splitter,
+        parent_splitter=parent_splitter,
+    )
+    parent_retriever.add_documents(semantic_chunks)
+
+    # 4. 构建 BM25（用父块做索引，关键词匹配更充分）
+    parent_chunks = parent_splitter.split_documents(semantic_chunks)
+    print(f"  父块: {len(parent_chunks)} 个")
+
+    def chinese_tokenizer(text: str) -> list[str]:
+        return list(jieba.cut(text))
+
+    bm25 = BM25Retriever.from_documents(parent_chunks, preprocess_func=chinese_tokenizer)
+    bm25.k = HYBRID_K
+
+    # 5. Ensemble: BM25 + ParentDoc 混合
+    ensemble = EnsembleRetriever(
+        retrievers=[bm25, parent_retriever],
+        weights=[0.4, 0.6],
+    )
+
+    # 6. Reranker
+    print(f"  加载 Reranker: {RERANK_MODEL} ...")
+    rerank_tokenizer = AutoTokenizer.from_pretrained(RERANK_MODEL)
+    rerank_model = AutoModelForSequenceClassification.from_pretrained(RERANK_MODEL)
+    rerank_model.eval()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    rerank_model.to(device)
+    print(f"    -> device={device}")
+
+    rewrite_llm = OllamaLLM(model=ANSWER_LLM_MODEL, temperature=0)
+
+    def rerank_docs(query, candidates):
+        if not candidates:
+            return [], []
+        # 去重（ParentDoc + BM25 可能返回相同的父块）
+        seen = set()
+        unique_candidates = []
+        for doc in candidates:
+            fp = doc.page_content[:80]
+            if fp not in seen:
+                seen.add(fp)
+                unique_candidates.append(doc)
+        candidates = unique_candidates
+
+        pairs = [[query, doc.page_content] for doc in candidates]
+        with torch.no_grad():
+            inputs = rerank_tokenizer(
+                pairs, padding=True, truncation=True, max_length=512, return_tensors="pt"
+            ).to(device)
+            scores = rerank_model(**inputs, return_dict=True).logits.view(-1).float().cpu().tolist()
+        sorted_pairs = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
+        return [p[0] for p in sorted_pairs[:TOP_N]], [p[1] for p in sorted_pairs[:TOP_N]]
+
+    def rewrite_loop_search(query):
+        candidates = ensemble.invoke(query)
+        results, scores = rerank_docs(query, candidates)
+
+        if results and scores and scores[0] >= 0.0:
+            return results, scores
+
+        rewrite_prompt = f"""你是一个检索专家。用户的原始问题是: {query}
+检索系统未能找到相关文档。请将这个问题改写得更具体、更贴近文档中的术语。
+只输出改写后的问题,不要加任何解释。"""
+
+        for _attempt in range(2):
+            try:
+                rewritten = rewrite_llm.invoke(rewrite_prompt).strip()
+                candidates = ensemble.invoke(rewritten)
+                results, scores = rerank_docs(rewritten, candidates)
+                if results and scores and scores[0] >= 0.0:
+                    return results, scores
+            except Exception:
+                pass
+        return results, scores
+
+    return rewrite_loop_search
+
+
 # ============== 6. 主入口 ==============
 
 def run_evaluation(mode: str):
@@ -332,6 +481,14 @@ def run_evaluation(mode: str):
         ragas_samples = build_ragas_samples(eval_samples, pipeline, answer_llm)
         results["improved"] = run_ragas_eval(ragas_samples, "Improved (Stage 1)")
 
+    if mode in ("stage3", "compare"):
+        pipeline = create_stage3_pipeline()
+        print(f"\n{'='*60}")
+        print(f"  Stage 3: 语义切块 + ParentDoc + Rerank")
+        print(f"{'='*60}")
+        ragas_samples = build_ragas_samples(eval_samples, pipeline, answer_llm)
+        results["stage3"] = run_ragas_eval(ragas_samples, "Stage 3 (Semantic + ParentDoc)")
+
     # 输出结果
     print(f"\n{'='*60}")
     print("  RAGAS 评估结果")
@@ -347,19 +504,25 @@ def run_evaluation(mode: str):
             print(f"  {m:25s}: {val:.4f}" if val is not None else f"  {m:25s}: N/A")
 
     # 对比
-    if len(results) == 2:
+    if len(results) >= 2:
         print(f"\n{'='*60}")
-        print("  对比: Baseline -> Improved")
+        print("  对比")
         print(f"{'='*60}")
-        b = results["baseline"]["scores"]
-        i = results["improved"]["scores"]
-        for m in metric_names:
-            bv = b.get(m)
-            iv = i.get(m)
-            if bv is not None and iv is not None:
-                delta = iv - bv
-                sign = "+" if delta >= 0 else ""
-                print(f"  {m:25s}: {bv:.4f} -> {iv:.4f}  ({sign}{delta:.4f})")
+        keys = list(results.keys())
+        # 两两对比
+        for idx_a in range(len(keys)):
+            for idx_b in range(idx_a + 1, len(keys)):
+                ka, kb = keys[idx_a], keys[idx_b]
+                print(f"\n  {results[ka]['label']} -> {results[kb]['label']}")
+                sa = results[ka]["scores"]
+                sb = results[kb]["scores"]
+                for m in metric_names:
+                    va = sa.get(m)
+                    vb = sb.get(m)
+                    if va is not None and vb is not None:
+                        delta = vb - va
+                        sign = "+" if delta >= 0 else ""
+                        print(f"    {m:25s}: {va:.4f} -> {vb:.4f}  ({sign}{delta:.4f})")
 
     # 保存结果
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -382,8 +545,9 @@ def run_evaluation(mode: str):
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "compare"
-    if mode not in ("baseline", "improved", "compare"):
-        print(f"用法: python eval.py [baseline|improved|compare]")
+    valid_modes = ("baseline", "improved", "stage3", "compare")
+    if mode not in valid_modes:
+        print(f"用法: python eval.py [{'|'.join(valid_modes)}]")
         sys.exit(1)
 
     print("=" * 60)
